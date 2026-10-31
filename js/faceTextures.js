@@ -264,8 +264,8 @@ export class FaceTextureGenerator {
 
   /**
    * Loads and extracts the exact face crop from the uploaded reference artwork!
-   * isDog = false -> Student Cat face (Cadet Whiskers)
-   * isDog = true  -> Teacher Dog face (Professor Nova)
+   * isDog = false -> Student Cat face (Cadet Tom)
+   * isDog = true  -> Teacher Dog face (Professor Spike)
    */
   static createExactImageFaceTexture(isDog = false, size = 512) {
     const canvas = document.createElement('canvas');

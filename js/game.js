@@ -24,6 +24,7 @@ export class Game {
     this.prevPlanet = null; // Prior visited planet
     this.currentPlanetData = null; // NASA data of current world
     this.hasHadFirstBriefingOnPlanet = {}; // Track first-time briefings per world
+    this.cachedDashboardResult = {}; // Cache planetary comparison dashboards per world
 
     // Services
     this.nasaService = new NasaService();
@@ -146,26 +147,41 @@ export class Game {
     this.scene.add(this.earthGroup);
     this.activePlanetGroup = this.earthGroup;
 
-    // 2. Spawn Student Astronaut Player
+    // 2. Spawn Student Astronaut Player (Cadet Tom)
     this.playerAstronaut = CharacterModelBuilder.createAstronaut(false);
+    this.playerAstronaut.name = 'Tom';
     this.playerAstronaut.position.copy(this.earthGroup.userData.spawnPosition);
     this.scene.add(this.playerAstronaut);
+    this.isPlayerWaving = true;
 
-    // Initial orientation: face toward Professor Nova!
+    // Initial orientation: Tom spawns far away from Professor Spike & spaceship, facing camera & waving
     const up = this.playerAstronaut.position.clone().normalize();
-    const teacher = this.earthGroup.userData.teacherMesh;
-    if (teacher) {
-      const toTeacher = teacher.position.clone().sub(up.clone().multiplyScalar(teacher.position.dot(up))).normalize();
-      const right = new THREE.Vector3().crossVectors(up, toTeacher).normalize();
-      const pMat = new THREE.Matrix4().makeBasis(right, up, toTeacher);
-      this.playerAstronaut.quaternion.setFromRotationMatrix(pMat);
-      this.physics.characterFacing.copy(toTeacher);
-      // Cinematic three-quarter camera framing: shows both Cadet Whiskers and Professor Nova's faces clearly
-      this.physics.camForward.copy(toTeacher);
-      this.physics.camForward.applyAxisAngle(up, 0.42);
-    } else {
-      this.playerAstronaut.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), up);
-    }
+    this.physics.resetState(this.playerAstronaut.position, this.earthGroup.userData.radius);
+    this.physics.camDistance = 5.2;
+    this.physics.camHeight = 1.6;
+    this.physics.camPitch = 0.12;
+
+    // Vector towards distant base camp
+    const campDir = new THREE.Vector3(
+      Math.cos(27 * Math.PI / 180) * Math.sin(-20 * Math.PI / 180),
+      Math.sin(27 * Math.PI / 180),
+      Math.cos(27 * Math.PI / 180) * Math.cos(-20 * Math.PI / 180)
+    ).normalize();
+    const toCamp = campDir.clone().sub(up.clone().multiplyScalar(campDir.dot(up))).normalize();
+    const awayFromCamp = toCamp.clone().negate().normalize();
+
+    // Camera looks along awayFromCamp (looking at Tom and out towards open horizon)
+    this.physics.camForward.copy(awayFromCamp);
+
+    // Tom looks directly towards the camera (which is -camForward)
+    const toCamera = this.physics.camForward.clone().negate().normalize();
+    this.physics.characterFacing.copy(toCamera);
+    const facingRight = new THREE.Vector3().crossVectors(up, toCamera).normalize();
+    const pMat = new THREE.Matrix4().makeBasis(facingRight, up, toCamera);
+    this.playerAstronaut.quaternion.setFromRotationMatrix(pMat);
+
+    // Position camera immediately facing Tom
+    this.physics.updateCamera(this.camera, this.playerAstronaut, up, 1.0);
 
     // 3. Build Re-Entry Descent Spaceship for cinematic sequence
     this.descentShip = CharacterModelBuilder.createSpaceship();
@@ -190,11 +206,11 @@ export class Game {
 
     // 5. Update HUD for Earth Onboarding
     this.updateAtmosphereHUD(this.earthGroup.userData.atmosphereDetails, 'Earth (Home Base)');
-    this.showProximityPrompt('Explore Earth! Approach trees to scan, or check the mining drill.');
+    this.showProximityPrompt('Welcome Cadet Tom! Explore Earth, scan wild trees, or head toward base camp to meet Professor Spike.');
   }
 
   async loadExoplanetData() {
-    const result = await this.nasaService.fetchExoplanets(45);
+    const result = await this.nasaService.fetchExoplanets(60);
     this.universeMap.populateNodes(result.planets, planet => {
       if (this.currentState === GAME_STATE.UNIVERSE_MAP) {
         this.displayPlanetInspector(planet);
@@ -235,6 +251,15 @@ export class Game {
       if (e.code === 'Tab') {
         e.preventDefault();
         this.toggleGalaxyMap();
+      }
+      if (this.currentState === GAME_STATE.UNIVERSE_MAP) {
+        if (e.code === 'BracketLeft') {
+          e.preventDefault();
+          this.toggleLeftMenuCollapse();
+        } else if (e.code === 'BracketRight') {
+          e.preventDefault();
+          this.toggleRightMenuCollapse();
+        }
       }
       if (e.code === 'Escape') {
         // Hierarchical escape closing: inspect modal -> sub-modals -> galaxy map
@@ -382,6 +407,23 @@ export class Game {
       });
     });
 
+    // Collapsible Planet Map Left & Right Menus (Header buttons & Dock tabs)
+    const inspectorCollapseHandler = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.toggleLeftMenuCollapse();
+    };
+    document.getElementById('collapse-inspector-btn')?.addEventListener('click', inspectorCollapseHandler);
+    document.getElementById('dock-tab-inspector')?.addEventListener('click', inspectorCollapseHandler);
+
+    const galaxyMapCollapseHandler = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.toggleRightMenuCollapse();
+    };
+    document.getElementById('collapse-galaxy-map-btn')?.addEventListener('click', galaxyMapCollapseHandler);
+    document.getElementById('dock-tab-galaxy-map')?.addEventListener('click', galaxyMapCollapseHandler);
+
     // Backdrop click for full-screen modal overlays (e.g. plant scan, soil cross-section)
     document.querySelectorAll('.modal-overlay').forEach(overlay => {
       overlay.addEventListener('click', (e) => {
@@ -422,11 +464,15 @@ export class Game {
       }
     });
 
-    // Teacher dialogue quick questions
+    // Teacher dialogue quick questions & dashboard reopen
     document.querySelectorAll('.teacher-quick-ask').forEach(btn => {
       btn.addEventListener('click', e => {
         e.preventDefault();
         e.stopPropagation();
+        if (btn.id === 'show-comparison-dashboard-btn') {
+          this.displayComparisonDashboard();
+          return;
+        }
         const question = btn.getAttribute('data-question') || btn.textContent.trim();
         this.handleTeacherQuestion(question);
       });
@@ -452,40 +498,113 @@ export class Game {
       }
     });
 
-    // Map Search & Filters
+    // Map Search & Filter Event Handlers
+    this.activeRosterFilter = 'all';
+    this.activeSearchQuery = '';
+
     const searchInput = document.getElementById('map-search-input');
     searchInput?.addEventListener('input', e => {
-      const val = e.target.value.toLowerCase();
-      document.querySelectorAll('.roster-card').forEach(card => {
-        const name = card.getAttribute('data-name').toLowerCase();
-        card.style.display = name.includes(val) ? 'flex' : 'none';
-      });
+      this.activeSearchQuery = e.target.value.toLowerCase().trim();
+      this.applyRosterFilter();
     });
 
     document.querySelectorAll('.filter-pill').forEach(pill => {
       pill.addEventListener('click', e => {
         document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
         pill.classList.add('active');
-        const filter = pill.getAttribute('data-filter');
-        this.filterRoster(filter);
+        this.activeRosterFilter = pill.getAttribute('data-filter') || 'all';
+        this.applyRosterFilter();
       });
     });
   }
 
-  filterRoster(filter) {
-    document.querySelectorAll('.roster-card').forEach(card => {
+  applyRosterFilter() {
+    const filter = this.activeRosterFilter || 'all';
+    const query = this.activeSearchQuery || '';
+    const cards = document.querySelectorAll('.roster-card');
+    let visibleCount = 0;
+    const totalCount = cards.length;
+
+    cards.forEach(card => {
+      const name = (card.getAttribute('data-name') || '').toLowerCase();
+      const host = (card.getAttribute('data-host') || '').toLowerCase();
+      const type = card.getAttribute('data-type') || '';
       const isGoldilocks = card.getAttribute('data-goldilocks') === 'true';
       const isLiquid = card.getAttribute('data-liquid') === 'true';
-      const type = card.getAttribute('data-type');
+      const isLava = card.getAttribute('data-lava') === 'true';
+      const isNearby = card.getAttribute('data-nearby') === 'true';
+      const isEarth = card.getAttribute('data-name') === 'Earth';
 
-      let visible = true;
-      if (filter === 'goldilocks') visible = isGoldilocks;
-      else if (filter === 'liquid') visible = isLiquid;
-      else if (filter === 'super-earth') visible = type === 'Super-Earth';
-      else if (filter === 'gas-giant') visible = type === 'Gas Giant';
+      // Category filter check
+      let matchesCategory = true;
+      if (filter === 'goldilocks') {
+        matchesCategory = isGoldilocks;
+      } else if (filter === 'super-earth') {
+        matchesCategory = type === 'Super-Earth';
+      } else if (filter === 'liquid') {
+        matchesCategory = isLiquid;
+      } else if (filter === 'lava') {
+        matchesCategory = isLava;
+      } else if (filter === 'gas-giant') {
+        matchesCategory = type === 'Gas Giant';
+      } else if (filter === 'nearby') {
+        matchesCategory = isNearby || isEarth;
+      }
 
-      card.style.display = visible ? 'flex' : 'none';
+      // Search query check
+      let matchesSearch = true;
+      if (query) {
+        matchesSearch = name.includes(query) || host.includes(query) || type.toLowerCase().includes(query);
+      }
+
+      const isVisible = matchesCategory && matchesSearch;
+      card.style.display = isVisible ? 'flex' : 'none';
+      if (isVisible) visibleCount++;
     });
+
+    // Update roster counter readout
+    const counterEl = document.getElementById('roster-counter');
+    if (counterEl) {
+      counterEl.textContent = `Showing ${visibleCount} of ${totalCount} worlds`;
+    }
+
+    // Handle empty state
+    const list = document.getElementById('planet-roster-list');
+    let emptyEl = document.getElementById('roster-empty-state');
+    if (visibleCount === 0) {
+      if (!emptyEl && list) {
+        emptyEl = document.createElement('div');
+        emptyEl.id = 'roster-empty-state';
+        emptyEl.className = 'roster-empty-state';
+        emptyEl.innerHTML = `
+          <span>No matching exoplanets found for your search.</span>
+          <button class="roster-reset-btn" id="roster-reset-btn">Reset Filters</button>
+        `;
+        list.appendChild(emptyEl);
+        document.getElementById('roster-reset-btn')?.addEventListener('click', () => {
+          this.activeRosterFilter = 'all';
+          this.activeSearchQuery = '';
+          const input = document.getElementById('map-search-input');
+          if (input) input.value = '';
+          document.querySelectorAll('.filter-pill').forEach(p => {
+            p.classList.toggle('active', p.getAttribute('data-filter') === 'all');
+          });
+          this.applyRosterFilter();
+        });
+      }
+    } else if (emptyEl) {
+      emptyEl.remove();
+    }
+
+    // Synchronize 3D starfield map visibility so scene is clean and focused
+    if (this.universeMap && typeof this.universeMap.filterNodes === 'function') {
+      this.universeMap.filterNodes(filter, query);
+    }
+  }
+
+  filterRoster(filter) {
+    this.activeRosterFilter = filter;
+    this.applyRosterFilter();
   }
 
   populatePlanetRoster(planets, isLive) {
@@ -499,23 +618,35 @@ export class Game {
       sourceBadge.classList.toggle('live', isLive);
     }
 
+    const countBadge = document.getElementById('map-worlds-count');
+    if (countBadge) {
+      countBadge.textContent = `${planets.length + 1} Verified Worlds (NASA Archive)`;
+    }
+
     // Always include Earth at the top of the roster as a selectable destination
     const earthCard = document.createElement('div');
     earthCard.className = 'roster-card goldilocks earth-card';
     earthCard.setAttribute('data-name', 'Earth');
+    earthCard.setAttribute('data-host', 'Sun (Sol)');
     earthCard.setAttribute('data-goldilocks', 'true');
     earthCard.setAttribute('data-liquid', 'false');
+    earthCard.setAttribute('data-lava', 'false');
+    earthCard.setAttribute('data-nearby', 'true');
     earthCard.setAttribute('data-type', 'Terrestrial');
     earthCard.innerHTML = `
       <div class="roster-card-header">
         <span class="roster-name">🌍 Earth (Starting Base / Homeworld)</span>
-        <span class="goldilocks-badge">Homeworld</span>
+        <div class="roster-badges-wrap">
+          <span class="goldilocks-badge">Homeworld</span>
+          <span class="nearby-badge">Origin</span>
+        </div>
       </div>
       <div class="roster-meta">
         <span>Host: Sun (Sol)</span> •
         <span>1.00 R⊕</span> •
         <span>1.00g</span> •
-        <span>288 K</span>
+        <span>288 K</span> •
+        <span>0.0 LY</span>
       </div>
     `;
     earthCard.addEventListener('click', () => {
@@ -532,21 +663,45 @@ export class Game {
       const card = document.createElement('div');
       card.className = `roster-card ${p.isGoldilocks ? 'goldilocks' : ''}`;
       card.setAttribute('data-name', p.pl_name);
-      card.setAttribute('data-goldilocks', p.isGoldilocks);
-      card.setAttribute('data-liquid', p.isLiquidWorld);
+      card.setAttribute('data-host', p.hostname || '');
+      card.setAttribute('data-goldilocks', p.isGoldilocks ? 'true' : 'false');
+      card.setAttribute('data-liquid', p.isLiquidWorld ? 'true' : 'false');
+      card.setAttribute('data-lava', p.isLavaWorld ? 'true' : 'false');
+      card.setAttribute('data-nearby', p.isNearby ? 'true' : 'false');
       card.setAttribute('data-type', p.planetType);
+
+      // Build badges
+      let badgesHtml = '';
+      if (p.isGoldilocks) {
+        badgesHtml += '<span class="goldilocks-badge">Habitable</span>';
+      }
+      if (p.planetType === 'Super-Earth') {
+        badgesHtml += '<span class="super-earth-badge">Super-Earth</span>';
+      }
+      if (p.isLiquidWorld) {
+        badgesHtml += '<span class="liquid-badge">Ocean World</span>';
+      }
+      if (p.isLavaWorld) {
+        badgesHtml += '<span class="lava-badge">Lava World</span>';
+      }
+      if (p.planetType === 'Gas Giant') {
+        badgesHtml += '<span class="gas-badge">Gas Giant</span>';
+      }
+      if (p.isNearby) {
+        badgesHtml += '<span class="nearby-badge">&lt;50 LY</span>';
+      }
 
       card.innerHTML = `
         <div class="roster-card-header">
           <span class="roster-name">${p.pl_name}</span>
-          ${p.isGoldilocks ? '<span class="goldilocks-badge">Habitable</span>' : ''}
-          ${p.isLiquidWorld ? '<span class="liquid-badge">Ocean World</span>' : ''}
+          <div class="roster-badges-wrap">${badgesHtml}</div>
         </div>
         <div class="roster-meta">
           <span>Host: ${p.hostname}</span> •
           <span>${p.pl_rade} R⊕</span> •
           <span>${p.surfaceGravity}g</span> •
-          <span>${p.pl_eqt} K</span>
+          <span>${p.pl_eqt} K</span> •
+          <span>${p.dist_ly} LY</span>
         </div>
       `;
 
@@ -559,12 +714,16 @@ export class Game {
 
       list.appendChild(card);
     });
+
+    this.applyRosterFilter();
   }
 
   displayPlanetInspector(planet) {
     const modal = document.getElementById('planet-inspector-modal');
-    if (!modal) return;
+    if (!planet || !modal) return;
     modal.classList.remove('hidden');
+    modal.classList.remove('collapsed');
+    this.updateCollapseUI();
 
     const departure = this.currentPlanetData || EARTH_DATA;
     const isFromEarth = departure.pl_name === 'Earth' || departure.isEarth;
@@ -618,6 +777,75 @@ export class Game {
     }
   }
 
+  toggleLeftMenuCollapse(forceState = null) {
+    const modal = document.getElementById('planet-inspector-modal');
+    if (!modal) return;
+    const isCollapsed = forceState !== null ? forceState : !modal.classList.contains('collapsed');
+    if (isCollapsed) {
+      modal.classList.add('collapsed');
+    } else {
+      modal.classList.remove('collapsed');
+      modal.classList.remove('hidden');
+    }
+    this.updateCollapseUI();
+    this.audioService.playUIChime(true);
+  }
+
+  toggleRightMenuCollapse(forceState = null) {
+    const overlay = document.getElementById('galaxy-map-overlay');
+    if (!overlay) return;
+    const isCollapsed = forceState !== null ? forceState : !overlay.classList.contains('collapsed');
+    if (isCollapsed) {
+      overlay.classList.add('collapsed');
+    } else {
+      overlay.classList.remove('collapsed');
+      overlay.classList.remove('hidden');
+    }
+    this.updateCollapseUI();
+    this.audioService.playUIChime(true);
+  }
+
+  updateCollapseUI() {
+    const inspector = document.getElementById('planet-inspector-modal');
+    const roster = document.getElementById('galaxy-map-overlay');
+
+    if (inspector) {
+      const isCollapsed = inspector.classList.contains('collapsed');
+      const btn = document.getElementById('collapse-inspector-btn');
+      const dockTab = document.getElementById('dock-tab-inspector');
+      const arrow = dockTab?.querySelector('.tab-arrow');
+
+      if (btn) {
+        btn.textContent = isCollapsed ? '▶' : '◀';
+        btn.title = isCollapsed ? 'Expand Inspector ( [ )' : 'Collapse Inspector ( [ )';
+      }
+      if (dockTab) {
+        dockTab.title = isCollapsed ? 'Expand Planet Inspector ( [ )' : 'Collapse Planet Inspector ( [ )';
+      }
+      if (arrow) {
+        arrow.textContent = isCollapsed ? '▶' : '◀';
+      }
+    }
+
+    if (roster) {
+      const isCollapsed = roster.classList.contains('collapsed');
+      const btn = document.getElementById('collapse-galaxy-map-btn');
+      const dockTab = document.getElementById('dock-tab-galaxy-map');
+      const arrow = dockTab?.querySelector('.tab-arrow');
+
+      if (btn) {
+        btn.textContent = isCollapsed ? '◀' : '▶';
+        btn.title = isCollapsed ? 'Expand Roster ( ] )' : 'Collapse Roster ( ] )';
+      }
+      if (dockTab) {
+        dockTab.title = isCollapsed ? 'Expand Galaxy Roster ( ] )' : 'Collapse Galaxy Roster ( ] )';
+      }
+      if (arrow) {
+        arrow.textContent = isCollapsed ? '◀' : '▶';
+      }
+    }
+  }
+
   toggleGalaxyMap() {
     this.audioService.playUIChime(true);
     if (this.currentState === GAME_STATE.UNIVERSE_MAP) {
@@ -640,10 +868,12 @@ export class Game {
     if (this.descentShip) this.descentShip.visible = false;
 
     this.universeMap.show();
+    this.applyRosterFilter();
     document.getElementById('galaxy-map-overlay')?.classList.remove('hidden');
     document.getElementById('hud-atmosphere')?.classList.add('hidden');
     document.getElementById('controls-pill')?.classList.add('hidden');
     this.hideProximityPrompt();
+    this.updateCollapseUI();
   }
 
   closeGalaxyMap() {
@@ -667,8 +897,10 @@ export class Game {
    * STEP 3i: Orbital Approach & Goldilocks Habitable Zone Evaluation
    */
   initiateOrbitalApproach(planet) {
+    const targetPlanet = planet || this.universeMap?.selectedPlanet || this.nasaService?.cachedPlanets?.[0] || EARTH_DATA;
     this.prevPlanet = this.currentPlanetData || EARTH_DATA;
-    this.currentPlanetData = planet;
+    this.currentPlanetData = targetPlanet;
+    planet = targetPlanet;
     this.currentState = GAME_STATE.ORBITAL_APPROACH;
     this.cinematicTime = 0;
 
@@ -723,6 +955,9 @@ export class Game {
    * STEP 3ii: Atmospheric Entry Descent Sequence
    */
   async initiateAtmosphericEntry() {
+    if (!this.currentPlanetData) {
+      this.currentPlanetData = this.universeMap?.selectedPlanet || EARTH_DATA;
+    }
     this.currentState = GAME_STATE.ATMOSPHERIC_ENTRY;
     this.cinematicTime = 0;
     this.entryTelemetry = { altitude: 150, speed: 28000, heat: 2200 };
@@ -795,7 +1030,7 @@ export class Game {
     const commsElem = document.getElementById('entry-teacher-comms-text');
     if (commsElem) {
       if (isEarth) {
-        commsElem.textContent = 'Hold tight Cadet Whiskers! Retro-thrusters firing through Earth\'s blue sky. Prepare for touchdown on the home pad!';
+        commsElem.textContent = 'Hold onto your seat, Cadet Tom! 🌍 We are zooming through Earth\'s pretty blue sky straight toward home. Get ready for warm milk and chocolate cookies! 🍪';
       } else {
         const warningResult = await this.geminiService.generateEntryWarning(this.currentPlanetData);
         commsElem.textContent = warningResult.text;
@@ -807,6 +1042,9 @@ export class Game {
    * STEP 3iii & 3iii B: Surface Landing, Adaptive World & Gemini AI Teacher
    */
   async completeLanding() {
+    if (!this.currentPlanetData) {
+      this.currentPlanetData = this.universeMap?.selectedPlanet || EARTH_DATA;
+    }
     const isEarth = this.currentPlanetData.pl_name === 'Earth' || this.currentPlanetData.isEarth;
     this.currentState = isEarth ? GAME_STATE.EARTH_TUTORIAL : GAME_STATE.SURFACE_EXPLORATION;
 
@@ -868,9 +1106,9 @@ export class Game {
 
     // If liquid world, notice spaceship transformed into watership mode
     if (!isEarth && this.currentPlanetData.isLiquidWorld) {
-      this.showProximityPrompt('🌊 Ocean World: Spaceship in Watership Mode! Head over to Professor Nova [E] for your mission debriefing.');
+      this.showProximityPrompt('🌊 Ocean World: Spaceship in Watership Mode! Head over to Professor Spike [E] for your mission debriefing.');
     } else {
-      this.showProximityPrompt(`Touchdown on ${plName} confirmed! Head over to Professor Nova [E] for your mission debriefing.`);
+      this.showProximityPrompt(`Touchdown on ${plName} confirmed! Head over to Professor Spike [E] for your mission debriefing.`);
     }
 
     // If returned to Earth, reset currentPlanetData to null
@@ -989,19 +1227,26 @@ export class Game {
       if (isFirstVisit) {
         this.hasHadFirstBriefingOnPlanet[planetKey] = true;
         delete teacherTextElem.dataset.fullText;
-        teacherTextElem.textContent = 'Professor Nova is analyzing human compatibility and planetary telemetry...';
+        teacherTextElem.textContent = 'Professor Spike is preparing the Planetary Compatibility Dashboard...';
         try {
           const result = await this.geminiService.generateHumanCompatibilityComparison(
             currentPl,
             this.prevPlanet || EARTH_DATA
           );
+          this.cachedDashboardResult[planetKey] = result;
           if (teacherSourceBadge) {
             teacherSourceBadge.textContent = (result.source === 'featherless' || result.source === 'gemini')
               ? 'Featherless Live AI'
               : 'Teacher (Astro-Sim)';
             teacherSourceBadge.className = `teacher-source ${result.source}`;
           }
-          this.typewriterText(teacherTextElem, result.text, true);
+          if (this.typewriterInterval) {
+            clearInterval(this.typewriterInterval);
+            this.typewriterInterval = null;
+          }
+          teacherTextElem.dataset.fullText = result.text;
+          teacherTextElem.innerHTML = result.dashboardHtml || `<div class="speech-balloon">${result.text}</div>`;
+          this.audioService.playUIChime(true);
         } catch (err) {
           console.warn('Teacher briefing error:', err);
         }
@@ -1012,11 +1257,50 @@ export class Game {
         }
         this.typewriterText(
           teacherTextElem,
-          `Welcome back to the station, Cadet Whiskers! 🐾 Telemetry for ${currentPl.pl_name} is fully recorded (Gravity: ${currentPl.surfaceGravity || 1.0}g, Temp: ${currentPl.pl_eqt || 288} K). Use the quick topics below or ask any question to dive deeper!`,
+          `Welcome back, little cadet! 🐶✨ Telemetry for ${currentPl.pl_name} is in my notebook! Want to know if we can grow space berries, dig for shiny crystals, or bounce like a kangaroo? Ask me below!`,
           true
         );
       }
     }
+  }
+
+  async displayComparisonDashboard() {
+    const teacherTextElem = document.getElementById('teacher-dialogue-text');
+    const teacherSourceBadge = document.getElementById('teacher-source-indicator');
+    if (!teacherTextElem) return;
+
+    if (this.typewriterInterval) {
+      clearInterval(this.typewriterInterval);
+      this.typewriterInterval = null;
+    }
+
+    const currentPl = this.currentPlanetData || EARTH_DATA;
+    const planetKey = currentPl.pl_name;
+    const cached = this.cachedDashboardResult && this.cachedDashboardResult[planetKey];
+
+    if (cached) {
+      if (teacherSourceBadge) {
+        teacherSourceBadge.textContent = 'Dashboard (Astro-Sim)';
+        teacherSourceBadge.className = 'teacher-source offline';
+      }
+      teacherTextElem.dataset.fullText = cached.text;
+      teacherTextElem.innerHTML = cached.dashboardHtml;
+      this.audioService.playUIChime(true);
+      return;
+    }
+
+    const result = await this.geminiService.generateHumanCompatibilityComparison(
+      currentPl,
+      this.prevPlanet || EARTH_DATA
+    );
+    this.cachedDashboardResult[planetKey] = result;
+    if (teacherSourceBadge) {
+      teacherSourceBadge.textContent = 'Dashboard (Astro-Sim)';
+      teacherSourceBadge.className = 'teacher-source offline';
+    }
+    teacherTextElem.dataset.fullText = result.text;
+    teacherTextElem.innerHTML = result.dashboardHtml || `<div class="speech-balloon">${result.text}</div>`;
+    this.audioService.playUIChime(true);
   }
 
   initiateBoardingSequence(shipMesh) {
@@ -1172,12 +1456,12 @@ export class Game {
     let nearestDist = Infinity;
 
     for (const item of interactables) {
-      // Dynamic physical threshold tuned to prop size
+      // Dynamic physical threshold tuned to prop size and generous spacing
       const threshold = item.interactionRadius || (
-        (item.type === 'SPACESHIP' || item.type === 'BOAT') ? 7.2 :
-        item.type === 'DRILL' ? 5.8 :
-        item.type === 'TEACHER' ? 5.2 :
-        4.8
+        (item.type === 'SPACESHIP' || item.type === 'BOAT') ? 5.8 :
+        item.type === 'DRILL' ? 4.8 :
+        item.type === 'TEACHER' ? 4.8 :
+        4.0
       );
       const dist = playerPos.distanceTo(item.position);
       if (dist < threshold && dist < nearestDist) {
@@ -1314,13 +1598,19 @@ export class Game {
         this.audioService.playSplashSound();
       }
 
-      // Update student astronaut walk/swim/jump limb animations
+      // If player moves or jumps, disengage waving greeting and switch to active traversal
+      if (moveState.isMoving || moveState.isJumping || moveState.isSwimming || Math.abs(this.input.x) > 0.01 || Math.abs(this.input.y) > 0.01) {
+        this.isPlayerWaving = false;
+      }
+
+      // Update student astronaut walk/swim/jump limb animations (or waving greeting on load)
       CharacterModelBuilder.updateAnimation(
         this.playerAstronaut,
         delta,
         moveState.isMoving,
         moveState.isJumping,
-        moveState.isSwimming
+        moveState.isSwimming,
+        this.isPlayerWaving
       );
 
       // Update teacher waving animation if present

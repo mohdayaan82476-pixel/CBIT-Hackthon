@@ -57,7 +57,7 @@
         <span id="hud-n2-val" class="stat-value">78.08%</span>
       </div>
       <div class="progress-bar-bg">
-        <div class="progress-bar-fill fill-n2"></div>
+        <div class="progress-bar-fill fill-n2" style="width: 78.08%;"></div>
       </div>
 
       <!-- Oxygen -->
@@ -66,7 +66,7 @@
         <span id="hud-o2-val" class="stat-value">20.95%</span>
       </div>
       <div class="progress-bar-bg">
-        <div class="progress-bar-fill fill-o2"></div>
+        <div class="progress-bar-fill fill-o2" style="width: 20.95%;"></div>
       </div>
 
       <!-- Carbon Dioxide -->
@@ -75,7 +75,7 @@
         <span id="hud-co2-val" class="stat-value">0.04%</span>
       </div>
       <div class="progress-bar-bg">
-        <div class="progress-bar-fill fill-co2"></div>
+        <div class="progress-bar-fill fill-co2" style="width: 0.04%;"></div>
       </div>
 
       <!-- Surface Pressure & Temp -->
@@ -189,22 +189,35 @@
 
     <!-- STEP 2: UNIVERSE OVERVIEW MAP OVERLAY -->
     <div id="galaxy-map-overlay" class="glass-panel hidden interactive">
+      <!-- Attached Collapsible Docking Tab -->
+      <button id="dock-tab-galaxy-map" class="map-collapse-tab-right" title="Collapse Galaxy Roster ( ] )">
+        <span class="tab-arrow">▶</span>
+        <span class="tab-icon">🌌</span>
+        <span class="tab-text">WORLDS</span>
+      </button>
+
       <div class="map-overlay-topbar">
         <div class="map-title-row">
           <span class="map-title-text">🌌 Galaxy Sector Map</span>
-          <span class="map-subtitle-text">45 Verified Worlds</span>
+          <span id="map-worlds-count" class="map-subtitle-text">53 Verified Worlds (NASA Archive)</span>
         </div>
-        <button class="modal-close-btn" id="close-galaxy-map-btn" title="Close Map (Esc)">✕</button>
+        <div class="modal-header-actions">
+          <button class="modal-collapse-btn" id="collapse-galaxy-map-btn" title="Collapse Roster ( ] )">▶</button>
+          <button class="modal-close-btn" id="close-galaxy-map-btn" title="Close Map (Esc)">✕</button>
+        </div>
       </div>
       <div class="map-controls-header">
-        <input type="text" id="map-search-input" class="map-search-bar" placeholder="🔍 Search Exoplanets (e.g. TRAPPIST, Kepler, K2)...">
+        <input type="text" id="map-search-input" class="map-search-bar" placeholder="🔍 Search Exoplanets (e.g. TRAPPIST, Kepler, Proxima)...">
         <div class="filter-pills-row">
-          <button class="filter-pill active" data-filter="all">All</button>
+          <button class="filter-pill active" data-filter="all">All Worlds</button>
           <button class="filter-pill" data-filter="goldilocks">✨ Habitable</button>
-          <button class="filter-pill" data-filter="liquid">🌊 Ocean (ρ &lt; 2)</button>
           <button class="filter-pill" data-filter="super-earth">⛰️ Super-Earth</button>
+          <button class="filter-pill" data-filter="liquid">🌊 Ocean World</button>
+          <button class="filter-pill" data-filter="lava">🔥 Lava World</button>
           <button class="filter-pill" data-filter="gas-giant">🪐 Gas Giant</button>
+          <button class="filter-pill" data-filter="nearby">🚀 Nearby (&lt; 50 LY)</button>
         </div>
+        <div id="roster-counter" class="roster-counter">Showing 53 of 53 worlds</div>
       </div>
       <div id="planet-roster-list">
         <!-- Roster items populated dynamically from NASA TAP API -->
@@ -213,12 +226,22 @@
 
     <!-- STEP 2: EXOPLANET INSPECTOR MODAL -->
     <div id="planet-inspector-modal" class="glass-panel hidden interactive">
+      <!-- Attached Collapsible Docking Tab -->
+      <button id="dock-tab-inspector" class="map-collapse-tab-left" title="Collapse Planet Inspector ( [ )">
+        <span class="tab-arrow">◀</span>
+        <span class="tab-icon">🪐</span>
+        <span class="tab-text">INSPECT</span>
+      </button>
+
       <div class="modal-header">
         <div>
           <h2 id="inspect-pl-name" class="modal-title">TRAPPIST-1 e</h2>
           <span style="font-size: 0.75rem; color: var(--text-muted);">Host Star: <span id="inspect-host-star">TRAPPIST-1</span></span>
         </div>
-        <button class="modal-close-btn" id="close-inspector-btn" title="Close Inspector">✕</button>
+        <div class="modal-header-actions">
+          <button class="modal-collapse-btn" id="collapse-inspector-btn" title="Collapse Inspector ( [ )">◀</button>
+          <button class="modal-close-btn" id="close-inspector-btn" title="Close Inspector">✕</button>
+        </div>
       </div>
 
       <div id="inspect-goldilocks-status" class="inspect-badge goldilocks">
@@ -335,8 +358,8 @@
         </div>
       </div>
       <div class="teacher-comms-box">
-        <strong>🎙️ Professor Nova Comms:</strong>
-        <p id="entry-teacher-comms-text" style="margin-top: 6px;">Hold tight cadet, thermal shields are glowing as we pierce the stratosphere!</p>
+        <strong>🎙️ Professor Spike Comms:</strong>
+        <p id="entry-teacher-comms-text" style="margin-top: 6px;">Hold tight Cadet Tom, thermal shields are glowing as we pierce the stratosphere!</p>
       </div>
     </div>
 
@@ -347,13 +370,13 @@
           <div class="teacher-avatar-circle dog-portrait">
             <span class="avatar-emoji">🐶</span>
           </div>
-          <span class="teacher-avatar-name">Prof. Nova</span>
+          <span class="teacher-avatar-name">Prof. Spike</span>
           <span class="teacher-avatar-role">Astrobiology Lead</span>
         </div>
         <div class="teacher-content-col">
           <div class="modal-header speech-header">
             <div class="mentor-badge-wrap">
-              <span class="speaker-name">Professor Nova</span>
+              <span class="speaker-name">Professor Spike</span>
               <span id="teacher-source-indicator" class="teacher-source featherless">Featherless Live AI</span>
             </div>
             <button class="modal-close-btn" title="Close">✕</button>
@@ -363,6 +386,7 @@
           </div>
           
           <div class="teacher-qa-row">
+            <button id="show-comparison-dashboard-btn" class="teacher-quick-ask" style="background: rgba(56, 189, 248, 0.16); border-color: rgba(56, 189, 248, 0.4); color: #7dd3fc; font-weight: 700;">📊 Planet Table</button>
             <button class="teacher-quick-ask" data-question="Can we grow edible crops or farm here?">🌱 Can we farm here?</button>
             <button class="teacher-quick-ask" data-question="What minerals can our mining drill extract?">⛏️ What can we mine?</button>
             <button class="teacher-quick-ask" data-question="How does gravity here compare to Earth?">⚖️ How is gravity?</button>
@@ -370,7 +394,7 @@
           </div>
 
           <div class="teacher-input-row">
-            <input type="text" id="teacher-custom-question" placeholder="Ask Professor Nova anything about this planet...">
+            <input type="text" id="teacher-custom-question" placeholder="Ask Professor Spike anything about this planet...">
             <button id="send-teacher-question">Ask 🐾</button>
           </div>
         </div>

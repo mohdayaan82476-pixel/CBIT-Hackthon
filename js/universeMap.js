@@ -275,11 +275,17 @@ export class UniverseMap {
     planets.forEach((p, idx) => {
       const nodeGroup = new THREE.Group();
 
-      // Layout: X = logarithmic light-year distance, Y/Z = spread for visibility
-      const posX = this._distanceToX(p.dist_ly || 40.0);
-      const spread = 14 + (idx % 5) * 5;
-      const posZ = Math.sin(idx * 1.618) * spread;
-      const posY = Math.cos(idx * 2.399) * 7.0;
+      // Layout: X = logarithmic light-year distance corridor from Earth
+      // For multi-planet systems sharing near-identical distances, apply subtle longitudinal staggering
+      const basePosX = this._distanceToX(p.dist_ly || 40.0);
+      const xStagger = ((idx % 7) - 3) * 0.9;
+      const posX = basePosX + xStagger;
+
+      // Elegant cylindrical phyllotaxis / golden-angle spiral around central sector corridor
+      const goldenAngle = idx * 2.399963;
+      const radius = 10.0 + (idx % 4) * 4.5;
+      const posY = Math.sin(goldenAngle) * (radius * 0.62);
+      const posZ = Math.cos(goldenAngle) * radius;
       nodeGroup.position.set(posX, posY, posZ);
 
       // ── Planet type colours ────────────────────────────────────────
@@ -370,6 +376,37 @@ export class UniverseMap {
     const def = this.planetNodes.find(n => n.data.pl_name && n.data.pl_name.includes('TRAPPIST-1 e'))
               || this.planetNodes[0];
     if (def) this.selectPlanet(def);
+  }
+
+  /**
+   * Filters 3D planet nodes in space so only matching categories or search queries remain prominent,
+   * avoiding visual overload.
+   */
+  filterNodes(filterType = 'all', searchQuery = '') {
+    const q = (searchQuery || '').trim().toLowerCase();
+
+    this.planetNodes.forEach(node => {
+      const p = node.data;
+      let matchesFilter = true;
+      if (filterType === 'goldilocks') matchesFilter = Boolean(p.isGoldilocks);
+      else if (filterType === 'super-earth') matchesFilter = p.planetType === 'Super-Earth';
+      else if (filterType === 'liquid') matchesFilter = Boolean(p.isLiquidWorld);
+      else if (filterType === 'lava') matchesFilter = Boolean(p.isLavaWorld) || (p.pl_eqt || 0) > 900;
+      else if (filterType === 'gas-giant') matchesFilter = p.planetType === 'Gas Giant' || (p.pl_rade || 1) >= 4.0;
+      else if (filterType === 'nearby') matchesFilter = Boolean(p.isNearby) || (p.dist_ly || 999) < 50.0;
+
+      let matchesSearch = true;
+      if (q) {
+        const name = (p.pl_name || '').toLowerCase();
+        const host = (p.hostname || '').toLowerCase();
+        const method = (p.discoverymethod || '').toLowerCase();
+        const type = (p.planetType || '').toLowerCase();
+        matchesSearch = name.includes(q) || host.includes(q) || method.includes(q) || type.includes(q);
+      }
+
+      const isVisible = matchesFilter && matchesSearch;
+      node.nodeGroup.visible = isVisible;
+    });
   }
 
   // ════════════════════════════════════════════════════════════════════════
@@ -506,7 +543,8 @@ export class UniverseMap {
     this.mouse.y = -(clientY / window.innerHeight) *  2 + 1;
 
     this.raycaster.setFromCamera(this.mouse, this.camera);
-    const meshes = this.planetNodes.map(n => n.planetMesh);
+    const visibleNodes = this.planetNodes.filter(n => n.nodeGroup.visible);
+    const meshes = visibleNodes.map(n => n.planetMesh);
     if (this.mapEarthMesh) meshes.push(this.mapEarthMesh);
     const hits   = this.raycaster.intersectObjects(meshes, true);
 
@@ -514,7 +552,7 @@ export class UniverseMap {
       if (hits[0].object === this.mapEarthMesh && this.earthNode) {
         this.selectPlanet(this.earthNode);
       } else {
-        const found = this.planetNodes.find(n => n.planetMesh === hits[0].object);
+        const found = visibleNodes.find(n => n.planetMesh === hits[0].object);
         if (found) this.selectPlanet(found);
       }
     }

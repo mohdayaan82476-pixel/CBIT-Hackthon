@@ -128,84 +128,111 @@ export class PlanetGenerator {
       return { pos: surfacePos, dir };
     };
 
-    // 4. Place Landing Pad & Exploration Spaceship right beside Astrobiology Camp
+    // 4. Place Landing Pad & Exploration Spaceship (Northwest Quadrant of Base Camp)
     const landingPad = this.createLandingPad();
-    placeOnSurface(landingPad, 15, -23, 0.1);
+    const padLoc = placeOnSurface(landingPad, 28, -32, 0.1);
 
     const spaceship = CharacterModelBuilder.createSpaceship();
     spaceship.name = 'ExplorationSpaceship';
-    placeOnSurface(spaceship, 15, -23, 0.25, 3.2); // Solid collider: 3.2m hull, resting on landing pad
+    const shipLoc = placeOnSurface(spaceship, 28, -32, 0.25, 3.2); // Solid collider: 3.2m hull, resting on landing pad
     spaceship.userData.isSpaceship = true;
+
+    // Mission Flag standing proudly on path entrance to landing pad (clean non-overlapping clearance)
+    const missionFlag = this.createMissionFlag();
+    missionFlag.name = 'MissionFlag';
+    placeOnSurface(missionFlag, 22, -26, 0.1, 0.4);
+
+    // Central courtyard focal direction for camp structures
+    const campCenterDir = new THREE.Vector3(
+      Math.cos(15 * Math.PI / 180) * Math.sin(-20 * Math.PI / 180),
+      Math.sin(15 * Math.PI / 180),
+      Math.cos(15 * Math.PI / 180) * Math.cos(-20 * Math.PI / 180)
+    ).normalize();
+
+    // Cadet Tom starting position on initial load / reload:
+    // Placed far away on an elevated green meadow vista (lat: -12, lon: 25),
+    // >20m-29m away from camp so that Professor Spike and the spaceship are completely out of frame.
+    const startSpawnDir = new THREE.Vector3(
+      Math.cos(-12 * Math.PI / 180) * Math.sin(25 * Math.PI / 180),
+      Math.sin(-12 * Math.PI / 180),
+      Math.cos(-12 * Math.PI / 180) * Math.cos(25 * Math.PI / 180)
+    ).normalize();
+    const spawnPosition = startSpawnDir.clone().multiplyScalar(radius + 0.1);
+
+    // Orient spaceship forward towards the central camp courtyard
+    const shipUp = shipLoc.dir.clone();
+    const shipForward = campCenterDir.clone().sub(shipUp.clone().multiplyScalar(campCenterDir.dot(shipUp))).normalize();
+    const shipRight = new THREE.Vector3().crossVectors(shipUp, shipForward).normalize();
+    const shipMat = new THREE.Matrix4().makeBasis(shipRight, shipUp, shipForward);
+    spaceship.quaternion.setFromRotationMatrix(shipMat);
     spaceship.userData.initialPosition = spaceship.position.clone();
     spaceship.userData.initialQuaternion = spaceship.quaternion.clone();
     group.userData.spaceshipMesh = spaceship;
+
     interactables.push({
       type: 'SPACESHIP',
       name: 'Exploration Star-Cruiser',
       prompt: '[E] Board Ship & Launch into Space',
       mesh: spaceship,
-      position: spaceship.position
+      position: spaceship.position,
+      interactionRadius: 5.8
     });
 
-    // Mission Flag standing beside landing pad and camp (matching reference artwork)
-    const missionFlag = this.createMissionFlag();
-    placeOnSurface(missionFlag, 13, -19, 0.1, 0.5);
-    colliders.push({ position: missionFlag.position, radius: 0.5 });
-
-    // 5. Place Teacher Astronaut NPC (Zone 2: Astrobiology Camp)
+    // 5. Place Teacher Astronaut NPC & Research Table (Northeast Quadrant: Astrobiology Camp)
     const teacher = CharacterModelBuilder.createAstronaut(true);
-    teacher.name = 'ProfessorNova';
-    const teacherLoc = placeOnSurface(teacher, 12, -15, 0.1, 1.2); // Solid collider: 1.2m
+    teacher.name = 'ProfessorSpike';
+    const teacherLoc = placeOnSurface(teacher, 26, -6, 0.1, 1.2); // Solid collider: 1.2m
     interactables.push({
       type: 'TEACHER',
-      name: 'Professor Nova (Astrobiologist)',
-      prompt: '[E] Speak with Professor',
+      name: 'Professor Spike (Astrobiologist)',
+      prompt: '[E] Speak with Professor Spike',
       mesh: teacher,
-      position: teacher.position
+      position: teacher.position,
+      interactionRadius: 4.8
     });
 
-    // Student astronaut starting spawn position (In open Astrobiology Camp facing Professor Nova)
-    const startSpawnDir = new THREE.Vector3(
-      Math.cos(12 * Math.PI / 180) * Math.sin(-11 * Math.PI / 180),
-      Math.sin(12 * Math.PI / 180),
-      Math.cos(12 * Math.PI / 180) * Math.cos(-11 * Math.PI / 180)
-    ).normalize();
-    const spawnPosition = startSpawnDir.clone().multiplyScalar(radius + 0.1);
-
-    // Rotate Professor Nova to face the student cadet spawn point directly!
+    // Rotate Professor Spike and his research table to face the central courtyard directly!
     const teacherUp = teacherLoc.dir.clone();
-    const toSpawn = startSpawnDir.clone().sub(teacherUp.clone().multiplyScalar(startSpawnDir.dot(teacherUp))).normalize();
+    const toSpawn = campCenterDir.clone().sub(teacherUp.clone().multiplyScalar(campCenterDir.dot(teacherUp))).normalize();
     const teacherRight = new THREE.Vector3().crossVectors(teacherUp, toSpawn).normalize();
     const teacherMat = new THREE.Matrix4().makeBasis(teacherRight, teacherUp, toSpawn);
     teacher.quaternion.setFromRotationMatrix(teacherMat);
     group.userData.teacherMesh = teacher;
 
-    // 6. Place Mining Core Drill Rig (Zone 3: Mineral Bedrock Outcrop near camp)
+    // 6. Place Mining Core Drill Rig (Southwest Quadrant: Mineral Bedrock Outcrop)
     const drill = CharacterModelBuilder.createMiningDrill();
     drill.name = 'DeepCoreMiningDrill';
-    placeOnSurface(drill, 5, -28, 0.2, 2.0); // Solid collider: 2.0m rig
+    const drillLoc = placeOnSurface(drill, 3, -32, 0.2, 2.0); // Solid collider: 2.0m rig
     drill.userData.isDrill = true;
+
+    // Orient drill forward toward camp courtyard
+    const drillUp = drillLoc.dir.clone();
+    const drillForward = campCenterDir.clone().sub(drillUp.clone().multiplyScalar(campCenterDir.dot(drillUp))).normalize();
+    const drillRight = new THREE.Vector3().crossVectors(drillUp, drillForward).normalize();
+    const drillMat = new THREE.Matrix4().makeBasis(drillRight, drillUp, drillForward);
+    drill.quaternion.setFromRotationMatrix(drillMat);
+
     interactables.push({
       type: 'DRILL',
       name: 'Automated Deep Core Rig',
       prompt: '[E] Inspect Core Soil Cross-Section',
       mesh: drill,
-      position: drill.position
+      position: drill.position,
+      interactionRadius: 4.8
     });
 
-    // 7. Place Lush Trees & Ancient Flora (Zone 4: Astrobiology Camp specimen + continents & ridges)
+    // 7. Place Lush Trees & Ancient Flora (Southeast Quadrant Specimen + distant continents)
     const treeCoords = [
-      { lat: 18, lon: 0, pine: false }, // Research specimen east of Astrobiology Camp (clean non-overlapping zone)
+      { lat: 4, lon: -6, pine: false }, // Research specimen Southeast of Astrobiology Camp
       { lat: 42, lon: 18, pine: true },
-      { lat: 25, lon: -32, pine: false },
+      { lat: 38, lon: -55, pine: false },
       { lat: 8, lon: 85, pine: true },
       { lat: -22, lon: 20, pine: false },
       { lat: 18, lon: 110, pine: true },
-      { lat: 38, lon: -55, pine: false },
-      { lat: -12, lon: -38, pine: true },
+      { lat: -12, lon: -55, pine: true },
       { lat: 48, lon: 65, pine: false },
       { lat: -28, lon: 72, pine: true },
-      { lat: 15, lon: -45, pine: false }
+      { lat: -35, lon: -15, pine: false }
     ];
 
     treeCoords.forEach((c, idx) => {
@@ -219,6 +246,7 @@ export class PlanetGenerator {
         prompt: '[E] Scan Biosphere Specimen',
         mesh: tree,
         position: loc.pos,
+        interactionRadius: 4.0,
         stats: {
           species: c.pine ? 'Pinus Sylvestris (Earth Pine)' : 'Quercus Terra (Earth Oak)',
           photosynthesisRating: c.pine ? '88% (Coniferous resilience)' : '96% (High efficiency C3)',
@@ -229,14 +257,14 @@ export class PlanetGenerator {
       });
     });
 
-    // 8. Place Low-poly rocks & boulders along mountain trails
+    // 8. Place Low-poly rocks & boulders along mountain trails (spaced far from camp interactables)
     const rockCoords = [
-      { lat: 22, lon: 12 },
-      { lat: -6, lon: 35 },
-      { lat: 15, lon: 68 },
-      { lat: -16, lon: -12 },
-      { lat: 35, lon: 82 },
-      { lat: 5, lon: -28 }
+      { lat: 38, lon: -15 }, // Northern mountain ridge
+      { lat: -15, lon: -40 }, // Southern mineral ridge
+      { lat: 15, lon: 68 },  // Distant continent
+      { lat: -6, lon: 35 },   // Distant continent
+      { lat: 35, lon: 82 },   // Distant continent
+      { lat: -20, lon: 0 }    // Far south
     ];
     rockCoords.forEach((c, idx) => {
       const rock = CharacterModelBuilder.createRock(0x6c757d);
@@ -414,12 +442,27 @@ export class PlanetGenerator {
       return { pos: surfacePos, dir };
     };
 
+    // Central courtyard spawn position on exoplanet (open landing plaza between quadrants)
+    const startSpawnDir = new THREE.Vector3(
+      Math.cos(20 * Math.PI / 180) * Math.sin(40 * Math.PI / 180),
+      Math.sin(20 * Math.PI / 180),
+      Math.cos(20 * Math.PI / 180) * Math.cos(40 * Math.PI / 180)
+    ).normalize();
+    const spawnPosition = startSpawnDir.clone().multiplyScalar(radius + 0.1);
+
     if (isLiquid) {
       // LIQUID OCEAN WORLD:
-      // Spaceship transforms into exploration hydrofoil boat!
+      // Spaceship transforms into exploration hydrofoil boat (Northwest Quadrant)
       const boat = CharacterModelBuilder.createExplorationBoat();
       boat.name = 'HydrofoilBoat';
-      placeOnSurface(boat, 25, 38, 0.1, 2.8);
+      const boatLoc = placeOnSurface(boat, 32, 26, 0.1, 2.8);
+
+      // Orient boat toward central landing plaza
+      const bUp = boatLoc.dir.clone();
+      const bForward = startSpawnDir.clone().sub(bUp.clone().multiplyScalar(startSpawnDir.dot(bUp))).normalize();
+      const bRight = new THREE.Vector3().crossVectors(bUp, bForward).normalize();
+      const bMat = new THREE.Matrix4().makeBasis(bRight, bUp, bForward);
+      boat.quaternion.setFromRotationMatrix(bMat);
       boat.userData.initialPosition = boat.position.clone();
       boat.userData.initialQuaternion = boat.quaternion.clone();
       boat.visible = false; // Hidden during atmospheric entry until touchdown!
@@ -430,17 +473,18 @@ export class PlanetGenerator {
         name: 'Hydrofoil Research Skiff',
         prompt: '[E] Board Skiff & Launch to Orbit',
         mesh: boat,
-        position: boat.position
+        position: boat.position,
+        interactionRadius: 5.8
       });
 
-      // Floating scientific buoys and kelp structures spread across oceans
+      // Floating scientific buoys spread in distinct quadrants across ocean
       const buoyCoords = [
-        { lat: 28, lon: 42 },
-        { lat: 35, lon: 12 },
-        { lat: 10, lon: 82 },
-        { lat: -18, lon: -25 },
-        { lat: 20, lon: -50 },
-        { lat: -28, lon: 45 }
+        { lat: 8, lon: 26 },   // Southwest Marine Lab Buoy
+        { lat: 8, lon: 54 },   // Southeast Bioluminescent Kelp Buoy
+        { lat: 45, lon: 15 },  // Distant ocean
+        { lat: 20, lon: 88 },  // Distant ocean
+        { lat: -25, lon: -30 },// Distant ocean
+        { lat: 30, lon: -55 }  // Distant ocean
       ];
       buoyCoords.forEach((c, idx) => {
         const buoy = this.createScienceBuoy();
@@ -448,10 +492,11 @@ export class PlanetGenerator {
         const loc = placeOnSurface(buoy, c.lat, c.lon, 0.2, 1.4);
         interactables.push({
           type: 'PLANT',
-          name: `Floating Ocean Bio-Pod #${idx + 1}`,
+          name: idx === 0 ? 'Marine Lab Buoy #1' : `Floating Ocean Bio-Pod #${idx + 1}`,
           prompt: '[E] Scan Marine Biosphere',
           mesh: buoy,
           position: loc.pos,
+          interactionRadius: 4.0,
           stats: {
             species: 'Hydro-Bioluminescent Algae Colony',
             photosynthesisRating: '92% (Aquatic light absorption)',
@@ -463,11 +508,19 @@ export class PlanetGenerator {
       });
     } else {
       // SOLID GROUND PLANET:
-      // Exploration Spaceship landed
+      // Exploration Spaceship landed (Northwest Quadrant of Landing Camp)
       const spaceship = CharacterModelBuilder.createSpaceship();
       spaceship.name = 'ExoSpaceship';
-      placeOnSurface(spaceship, 28, 42, 0.05, 3.2); // Solid collider: 3.2m, resting on surface terrain
+      const shipLoc = placeOnSurface(spaceship, 32, 26, 0.05, 3.2); // Solid collider: 3.2m, resting on surface terrain
       spaceship.userData.isSpaceship = true;
+
+      // Orient spaceship forward toward central camp plaza
+      const shipUp = shipLoc.dir.clone();
+      const shipForward = startSpawnDir.clone().sub(shipUp.clone().multiplyScalar(startSpawnDir.dot(shipUp))).normalize();
+      const shipRight = new THREE.Vector3().crossVectors(shipUp, shipForward).normalize();
+      const shipMat = new THREE.Matrix4().makeBasis(shipRight, shipUp, shipForward);
+      spaceship.quaternion.setFromRotationMatrix(shipMat);
+
       spaceship.userData.initialPosition = spaceship.position.clone();
       spaceship.userData.initialQuaternion = spaceship.quaternion.clone();
       spaceship.visible = false; // Hidden during atmospheric entry until touchdown!
@@ -477,30 +530,40 @@ export class PlanetGenerator {
         name: 'Exploration Star-Cruiser',
         prompt: '[E] Board Ship & Launch into Orbit',
         mesh: spaceship,
-        position: spaceship.position
+        position: spaceship.position,
+        interactionRadius: 5.8
       });
 
-      // Place Mining Drill at a mineral rich geological basin
+      // Place Mining Drill at Southwest Quadrant (Mineral Bedrock Ridge)
       const drill = CharacterModelBuilder.createMiningDrill();
       drill.name = 'ExoMiningDrill';
-      placeOnSurface(drill, 22, 52, 0.2, 2.0); // Solid collider: 2.0m, accessible on mineral ridge near landing site
+      const drillLoc = placeOnSurface(drill, 8, 26, 0.2, 2.0); // Solid collider: 2.0m, accessible on mineral ridge
+
+      // Orient drill forward toward central camp plaza
+      const drillUp = drillLoc.dir.clone();
+      const drillForward = startSpawnDir.clone().sub(drillUp.clone().multiplyScalar(startSpawnDir.dot(drillUp))).normalize();
+      const drillRight = new THREE.Vector3().crossVectors(drillUp, drillForward).normalize();
+      const drillMat = new THREE.Matrix4().makeBasis(drillRight, drillUp, drillForward);
+      drill.quaternion.setFromRotationMatrix(drillMat);
+
       interactables.push({
         type: 'DRILL',
         name: 'Planetary Core Drill',
         prompt: '[E] Inspect Exoplanet Soil Stratum',
         mesh: drill,
-        position: drill.position
+        position: drill.position,
+        interactionRadius: 4.8
       });
 
-      // Place alien flora / crystals generously spread across landscape
+      // Place alien flora / crystals (Southeast Quadrant Specimen + distant terrain)
       const alienCoords = [
-        { lat: 34, lon: 48, isCrystal: density > 4.5 },
-        { lat: 40, lon: 15, isCrystal: density > 4.5 },
-        { lat: 18, lon: 85, isCrystal: eqt > 500 },
-        { lat: -24, lon: -30, isCrystal: false },
-        { lat: 25, lon: -55, isCrystal: density > 5.0 },
-        { lat: -12, lon: 20, isCrystal: false },
-        { lat: 45, lon: 70, isCrystal: true }
+        { lat: 8, lon: 54, isCrystal: density > 4.5 }, // Southeast Camp Specimen #1
+        { lat: 46, lon: 15, isCrystal: density > 4.5 },
+        { lat: 20, lon: 88, isCrystal: eqt > 500 },
+        { lat: -25, lon: -30, isCrystal: false },
+        { lat: 30, lon: -55, isCrystal: density > 5.0 },
+        { lat: -15, lon: 20, isCrystal: false },
+        { lat: 50, lon: 75, isCrystal: true }
       ];
 
       alienCoords.forEach((c, idx) => {
@@ -516,6 +579,7 @@ export class PlanetGenerator {
           prompt: '[E] Scan Surface Specimen',
           mesh: item,
           position: loc.pos,
+          interactionRadius: 4.0,
           stats: {
             species: c.isCrystal ? 'Piezoelectric Silicate Crystal' : 'Silicon-Based Bioluminescent Fern',
             photosynthesisRating: c.isCrystal ? 'N/A (Crystalline matrix)' : `${Math.min(99, Math.round(eqt * 0.15))}%`,
@@ -527,28 +591,27 @@ export class PlanetGenerator {
       });
     }
 
-    // Teacher NPC standing in field research area
+    // Teacher NPC & Research Table (Northeast Quadrant of Landing Camp)
     const teacher = CharacterModelBuilder.createAstronaut(true);
-    teacher.name = 'ExoProfessorNova';
-    const teacherLat = isLiquid ? 22 : 25;
-    const teacherLon = isLiquid ? 34 : 38;
-    placeOnSurface(teacher, teacherLat, teacherLon, 0.1, 1.2); // Solid collider: 1.2m, beside landing camp
+    teacher.name = 'ExoProfessorSpike';
+    const teacherLoc = placeOnSurface(teacher, 32, 54, 0.1, 1.2); // Solid collider: 1.2m, beside landing camp
+
+    // Rotate Professor Spike and his research table to face the central camp courtyard directly!
+    const teacherUp = teacherLoc.dir.clone();
+    const toSpawn = startSpawnDir.clone().sub(teacherUp.clone().multiplyScalar(startSpawnDir.dot(teacherUp))).normalize();
+    const teacherRight = new THREE.Vector3().crossVectors(teacherUp, toSpawn).normalize();
+    const teacherMat = new THREE.Matrix4().makeBasis(teacherRight, teacherUp, toSpawn);
+    teacher.quaternion.setFromRotationMatrix(teacherMat);
+
     interactables.push({
       type: 'TEACHER',
-      name: 'Professor Nova',
-      prompt: '[E] Ask Professor about this world',
+      name: 'Professor Spike',
+      prompt: '[E] Ask Professor Spike about this world',
       mesh: teacher,
-      position: teacher.position
+      position: teacher.position,
+      interactionRadius: 4.8
     });
     group.userData.teacherMesh = teacher;
-
-    // Student astronaut spawn location (Near ship with clear sightlines)
-    const startSpawnDir = new THREE.Vector3(
-      Math.cos(22 * Math.PI / 180) * Math.sin(32 * Math.PI / 180),
-      Math.sin(22 * Math.PI / 180),
-      Math.cos(22 * Math.PI / 180) * Math.cos(32 * Math.PI / 180)
-    ).normalize();
-    const spawnPosition = startSpawnDir.clone().multiplyScalar(radius + 0.1);
 
     const atmosphereDetails = PlanetGenerator.computeAtmosphereDetails(planetData);
 

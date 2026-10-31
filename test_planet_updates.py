@@ -37,11 +37,14 @@ try:
     tabs = json.loads(req.read().decode('utf-8'))
     ws_url = None
     for tab in tabs:
-        if "index.html" in tab.get("url", ""):
+        if tab.get("type") == "page" and "index.html" in tab.get("url", ""):
             ws_url = tab.get("webSocketDebuggerUrl")
             break
-    if not ws_url and len(tabs) > 0:
-        ws_url = tabs[0].get("webSocketDebuggerUrl")
+    if not ws_url:
+        for tab in tabs:
+            if tab.get("type") == "page":
+                ws_url = tab.get("webSocketDebuggerUrl")
+                break
 
     print(f"Connecting to CDP: {ws_url}")
     u = urlparse(ws_url)
@@ -122,13 +125,19 @@ try:
                     print(f"Captured screenshot: {path}")
                 return
 
+    send_cdp("Runtime.enable")
+    send_cdp("Page.enable")
+
     print("Waiting for Game initialization...")
+    ready = False
     for _ in range(40):
-        time.sleep(0.25)
-        ready = eval_js("Boolean(window.game && window.game.activePlanetGroup)")
+        time.sleep(0.5)
+        ready = eval_js("Boolean(window.gameInstance && window.gameInstance.activePlanetGroup && window.gameInstance.playerAstronaut)")
         if ready:
             print("Game instance ready!")
             break
+
+    assert ready, "Game failed to initialize within 20 seconds"
 
     # ── TEST 1: Initial Earth Atmosphere HUD ─────────────────────────────
     print("\n--- TEST 1: Earth Atmosphere HUD Verification ---")
@@ -157,8 +166,8 @@ try:
     assert "78" in earth_atmo["fillN2"], f"Expected .fill-n2 width 78%, got {earth_atmo['fillN2']}"
     print("✅ TEST 1 PASSED: Initial Earth Atmosphere HUD & dynamic bars correct.")
 
-    # ── TEST 2: First Interaction with Professor Nova on Earth ───────────
-    print("\n--- TEST 2: First Interaction with Professor Nova on Earth ---")
+    # ── TEST 2: First Interaction with Professor Spike on Earth ───────────
+    print("\n--- TEST 2: First Interaction with Professor Spike on Earth ---")
     eval_js("""
         (() => {
             const teacherObj = window.game.earthGroup.userData.interactables.find(i => i.type === 'TEACHER');
@@ -186,7 +195,14 @@ try:
     combined_text = (earth_dialog.get("fullText") or "") + " " + (earth_dialog.get("text") or "")
     assert earth_dialog["isVisible"], "Teacher dialog should be open on interaction"
     assert "Earth" in combined_text or "Musculoskeletal" in combined_text or "1.0g" in combined_text, f"Unexpected text: {combined_text}"
-    print("✅ TEST 2 PASSED: First interaction delivers Earth debriefing.")
+
+    # Check dashboard table on Earth
+    has_earth_dashboard = eval_js("Boolean(document.querySelector('.comparison-dashboard') && document.querySelector('.dashboard-table'))")
+    earth_score = eval_js("document.querySelector('.score-number')?.textContent")
+    print(f"Earth Dashboard: has_table={has_earth_dashboard}, score={earth_score}")
+    assert has_earth_dashboard, "Earth first interaction should show comparison dashboard table!"
+    assert "100%" in earth_score, f"Expected 100% on Earth, got {earth_score}"
+    print("✅ TEST 2 PASSED: First interaction delivers Earth comparison dashboard table.")
 
     # Close dialog
     eval_js("document.getElementById('teacher-dialogue-modal').classList.add('hidden')")
@@ -284,7 +300,7 @@ try:
     print("✅ TEST 4 PASSED: Atmosphere HUD & dynamic bars updated for TRAPPIST-1 e, dialog waits for interact.")
 
     # ── TEST 5: First Interaction on TRAPPIST-1 e: Human Compatibility Debriefing ─
-    print("\n--- TEST 5: First Interaction with Professor Nova on TRAPPIST-1 e ---")
+    print("\n--- TEST 5: First Interaction with Professor Spike on TRAPPIST-1 e ---")
     eval_js("""
         (() => {
             const teacherObj = window.game.activePlanetGroup.userData.interactables.find(i => i.type === 'TEACHER');
@@ -315,7 +331,19 @@ try:
     assert "Earth" in combined_trappist, "Debriefing should compare against Earth baseline"
     assert "Musculoskeletal" in combined_trappist or "Gravity" in combined_trappist or "gravity" in combined_trappist, "Should discuss gravity"
     assert "Human Compatibility" in combined_trappist, "Should have Human Compatibility rating"
-    print("✅ TEST 5 PASSED: Human Compatibility debriefing generated and delivered on first interact.")
+
+    # Verify Dashboard Table structure
+    has_trappist_dashboard = eval_js("Boolean(document.querySelector('.comparison-dashboard') && document.querySelector('.dashboard-table'))")
+    trappist_score = eval_js("document.querySelector('.score-number')?.textContent")
+    trappist_rows = eval_js("document.querySelectorAll('.dashboard-table tbody tr').length")
+    print(f"TRAPPIST-1 e Dashboard: has_table={has_trappist_dashboard}, score={trappist_score}, rows={trappist_rows}")
+    assert has_trappist_dashboard, "TRAPPIST-1 e first interaction should display comparison dashboard table!"
+    assert trappist_rows == 4, f"Dashboard table should contain 4 factor rows, found {trappist_rows}"
+    assert "78%" in trappist_score, f"Expected 78% on TRAPPIST-1 e, got {trappist_score}"
+    print("✅ TEST 5 PASSED: Planetary comparison dashboard table generated and rendered on first interact.")
+
+    # Capture screenshot of the comparison dashboard table modal
+    capture_screenshot("C:/Users/sachin/.gemini/antigravity/brain/82bc2f42-54d0-40ab-bf80-9ddff7843d34/test_comparison_dashboard.png")
 
     # Close dialog and test second interaction on same world
     eval_js("document.getElementById('teacher-dialogue-modal').classList.add('hidden')")
@@ -335,8 +363,57 @@ try:
         })()
     """)
     print(f"Subsequent interaction text: {second_briefing}")
-    assert "Welcome back" in second_briefing, "Subsequent interaction should give warm welcome and prompt for questions"
-    print("✅ TEST 5.1 PASSED: Subsequent interaction gives standard greeting.")
+    assert ("little cadet" in second_briefing or "space berries" in second_briefing or "Welcome back" in second_briefing), "Subsequent interaction should give child-friendly welcome"
+    print("✅ TEST 5.1 PASSED: Subsequent interaction gives cheerful child-friendly greeting.")
+
+    # ── TEST 5.2: Child-Friendly (ELI5) Quick Questions & Dashboard Reopen ───
+    print("\n--- TEST 5.2: Child-Friendly Quick Questions & Dashboard Reopen ---")
+
+    # 1. Ask about farming
+    farm_reply = eval_js("""
+        (async () => {
+            await window.game.handleTeacherQuestion("Can we grow edible crops or farm here?");
+            return document.getElementById('teacher-dialogue-text')?.dataset.fullText || document.getElementById('teacher-dialogue-text')?.textContent;
+        })()
+    """)
+    print(f"Farming (ELI5) Reply: {farm_reply}")
+    assert any(w in farm_reply.lower() for w in ["veggie", "picnic", "strawberr", "plant", "seed", "sprout", "garden"]), f"Expected child-friendly farming words, got: {farm_reply}"
+
+    # 2. Ask about mining
+    mine_reply = eval_js("""
+        (async () => {
+            await window.game.handleTeacherQuestion("What minerals can our mining drill extract?");
+            return document.getElementById('teacher-dialogue-text')?.dataset.fullText || document.getElementById('teacher-dialogue-text')?.textContent;
+        })()
+    """)
+    print(f"Mining (ELI5) Reply: {mine_reply}")
+    assert any(w in mine_reply.lower() for w in ["treasure", "shiny", "metal", "truck", "drill", "pebble", "rock"]), f"Expected child-friendly mining words, got: {mine_reply}"
+
+    # 3. Ask about safety
+    safe_reply = eval_js("""
+        (async () => {
+            await window.game.handleTeacherQuestion("Is it safe to step out of the ship?");
+            return document.getElementById('teacher-dialogue-text')?.dataset.fullText || document.getElementById('teacher-dialogue-text')?.textContent;
+        })()
+    """)
+    print(f"Safety (ELI5) Reply: {safe_reply}")
+    assert any(w in safe_reply.lower() for w in ["superhero", "spacesuit", "costume", "safe", "cozy", "helmet"]), f"Expected child-friendly safety words, got: {safe_reply}"
+
+    # 4. Reopen Comparison Dashboard via button click
+    eval_js("""
+        (() => {
+            const btn = document.getElementById('show-comparison-dashboard-btn');
+            btn.click();
+        })()
+    """)
+    reopened_table = False
+    for _ in range(15):
+        time.sleep(0.2)
+        reopened_table = eval_js("Boolean(document.querySelector('.comparison-dashboard') && document.querySelector('.dashboard-table'))")
+        if reopened_table:
+            break
+    assert reopened_table, "Clicking '📊 Planet Table' button should re-render the comparison dashboard table!"
+    print("✅ TEST 5.2 PASSED: All quick answers are child-friendly (ELI5) and dashboard table reopens on demand.")
 
     eval_js("document.getElementById('teacher-dialogue-modal').classList.add('hidden')")
 

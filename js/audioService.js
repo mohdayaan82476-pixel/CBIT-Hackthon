@@ -38,8 +38,8 @@ export class AudioService {
     const gain = this.ctx.createGain();
 
     const code = char.charCodeAt(0);
-    // Professor Nova (Dog Teacher): warm, mellow, gentle pitch (260Hz - 480Hz)
-    // Cadet Whiskers (Cat Student): cheerful, playful, higher chirp (520Hz - 820Hz)
+    // Professor Spike (Dog Teacher): warm, mellow, gentle pitch (260Hz - 480Hz)
+    // Cadet Tom (Cat Student): cheerful, playful, higher chirp (520Hz - 820Hz)
     const baseFreq = isTeacher 
       ? 260 + ((code * 23) % 220)
       : 520 + ((code * 31) % 300);

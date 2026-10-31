@@ -1,10 +1,10 @@
-// characterModels.js - Adorable Animal Crossing Low-Poly 3D Astronauts (Cat Student & Dog Teacher), Rocket, Boat & Rig
+// characterModels.js - Adorable Animal Crossing Low-Poly 3D Astronauts (Tom & Professor Spike), Rocket, Boat & Rig
 import * as THREE from 'three';
 import { FaceTextureGenerator } from './faceTextures.js?v=2.5';
 
 export class CharacterModelBuilder {
   /**
-   * Creates the adorable Cat Astronaut (Student - Cadet Whiskers)
+   * Creates the adorable Cat Astronaut (Student - Cadet Tom)
    * Inspired by the reference artwork: Pointy cat ears through helmet, cute cat face,
    * red stripes, blue square & red circle buttons, pink paw pads, and fluffy curved cat tail.
    */
@@ -332,7 +332,7 @@ export class CharacterModelBuilder {
   }
 
   /**
-   * Creates the adorable Dog Astronaut (Teacher - Professor Nova / Bark)
+   * Creates the adorable Dog Astronaut (Teacher - Professor Spike)
    * Inspired by the reference artwork: Floppy brown puppy ears outside the helmet,
    * sweet golden-tan puppy face, holding the science datapad with ringed planet logo!
    */
@@ -444,7 +444,7 @@ export class CharacterModelBuilder {
     buckle.position.set(0, 0.58, 0.42);
     group.add(buckle);
 
-    // 2. Head & Helmet (Dog Teacher - Professor Nova, High-Fidelity Match with Reference)
+    // 2. Head & Helmet (Dog Teacher - Professor Spike, High-Fidelity Match with Reference)
     const headGroup = new THREE.Group();
     headGroup.position.y = 1.5;
 
@@ -636,6 +636,92 @@ export class CharacterModelBuilder {
     rightLegGroup.add(rightSole);
     group.add(rightLegGroup);
 
+    // 8. Field Astrobiology Research Desk (Stands neatly in front of Professor Spike)
+    const tableGroup = new THREE.Group();
+    tableGroup.position.set(0, 0, 0.72);
+
+    const tableMat = new THREE.MeshStandardMaterial({
+      color: 0x1e293b,
+      roughness: 0.6,
+      metalness: 0.4,
+      flatShading: true
+    });
+    const glowCyanMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+    const deskTopMat = new THREE.MeshStandardMaterial({
+      color: 0x0f172a,
+      roughness: 0.4,
+      metalness: 0.2,
+      flatShading: true
+    });
+
+    // Tabletop
+    const deskTop = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.08, 0.52), deskTopMat);
+    deskTop.position.y = 0.56;
+    deskTop.castShadow = true;
+    deskTop.receiveShadow = true;
+    tableGroup.add(deskTop);
+
+    // Glowing cyan accent border along the front edge of the desk
+    const deskGlowTrim = new THREE.Mesh(new THREE.BoxGeometry(1.22, 0.03, 0.04), glowCyanMat);
+    deskGlowTrim.position.set(0, 0.56, 0.26);
+    tableGroup.add(deskGlowTrim);
+
+    // Left and right support legs
+    const legL = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 0.54, 6), tableMat);
+    legL.position.set(-0.48, 0.27, 0);
+    legL.castShadow = true;
+    tableGroup.add(legL);
+
+    const legR = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 0.54, 6), tableMat);
+    legR.position.set(0.48, 0.27, 0);
+    legR.castShadow = true;
+    tableGroup.add(legR);
+
+    // Base feet
+    const footL = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.06, 0.44), tableMat);
+    footL.position.set(-0.48, 0.03, 0);
+    tableGroup.add(footL);
+
+    const footR = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.06, 0.44), tableMat);
+    footR.position.set(0.48, 0.03, 0);
+    tableGroup.add(footR);
+
+    // Holographic Planet Projector on the desk
+    const projectorBase = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.05, 8), tableMat);
+    projectorBase.position.set(-0.32, 0.62, 0.04);
+    tableGroup.add(projectorBase);
+
+    // Wireframe glowing holographic planet hovering above projector
+    const holoPlanet = new THREE.Mesh(
+      new THREE.SphereGeometry(0.09, 8, 8),
+      new THREE.MeshBasicMaterial({ color: 0x48cae4, wireframe: true })
+    );
+    holoPlanet.position.set(-0.32, 0.78, 0.04);
+    tableGroup.add(holoPlanet);
+
+    // Astrobiology Specimen Flask with glowing fluid
+    const flaskGeo = new THREE.CylinderGeometry(0.05, 0.07, 0.16, 8);
+    const flaskMat = new THREE.MeshStandardMaterial({
+      color: 0x52b788,
+      roughness: 0.2,
+      metalness: 0.1,
+      transparent: true,
+      opacity: 0.85
+    });
+    const flask = new THREE.Mesh(flaskGeo, flaskMat);
+    flask.position.set(0.32, 0.68, 0.06);
+    tableGroup.add(flask);
+
+    // Compact analysis keyboard / control pad
+    const keypad = new THREE.Mesh(
+      new THREE.BoxGeometry(0.3, 0.03, 0.2),
+      new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.7 })
+    );
+    keypad.position.set(0.02, 0.61, 0.08);
+    tableGroup.add(keypad);
+
+    group.add(tableGroup);
+
     group.userData = {
       leftArmGroup,
       rightArmGroup,
@@ -658,8 +744,8 @@ export class CharacterModelBuilder {
 
   /**
    * Universal astronaut creator mapping:
-   * isTeacher = true -> createDogAstronaut (Professor Nova)
-   * isTeacher = false -> createCatAstronaut (Student Cadet Whiskers)
+   * isTeacher = true -> createDogAstronaut (Professor Spike)
+   * isTeacher = false -> createCatAstronaut (Student Cadet Tom)
    */
   static createAstronaut(isTeacher = false) {
     return isTeacher ? this.createDogAstronaut() : this.createCatAstronaut();
@@ -688,16 +774,56 @@ export class CharacterModelBuilder {
     }
 
     if (isWaving) {
-      // Teacher friendly waving loop while holding datapad
-      u.rightArmGroup.rotation.x = Math.sin(t * 1.5) * 0.3 - 2.2;
-      u.rightArmGroup.rotation.z = Math.cos(t * 2.5) * 0.4 + 0.4;
-      if (!u.isTeacher) {
-        u.leftArmGroup.rotation.x = 0.1;
+      if (u.isTeacher) {
+        // Professor Spike (dog mentor) friendly waving while holding datapad
+        u.rightArmGroup.rotation.x = Math.sin(t * 1.5) * 0.3 - 2.2;
+        u.rightArmGroup.rotation.z = Math.cos(t * 2.5) * 0.4 + 0.4;
+        u.leftLegGroup.rotation.x = 0;
+        u.rightLegGroup.rotation.x = 0;
+        u.torso.position.y = 0.85 + Math.sin(t * 0.8) * 0.02;
+      } else {
+        // Tom (cat cadet) pointing directly towards the camera and waving his hand warmly!
+        // Natural waving speed (~1.7 Hz, relaxed, friendly and smooth)
+        const waveSpeed = 1.35;
+        const waveAngle = Math.sin(t * waveSpeed);
+
+        // Right arm raised high, waving in a smooth organic arc with wrist follow-through
+        // 1. Z-axis: primary side-to-side waving swing
+        u.rightArmGroup.rotation.z = 0.45 + waveAngle * 0.35;
+        // 2. X-axis: arm stays raised high while tracing a subtle convex arc at each turnaround
+        u.rightArmGroup.rotation.x = -2.32 + Math.cos(t * waveSpeed * 2.0) * 0.05 + Math.sin(t * 0.5) * 0.02;
+        // 3. Y-axis: natural wrist & forearm roll with phase lag (overlapping action)
+        u.rightArmGroup.rotation.y = -0.20 + Math.sin(t * waveSpeed + 0.4) * 0.12;
+
+        // Left arm outstretched pointing directly forward at the camera with gentle breathing
+        u.leftArmGroup.rotation.x = -1.50 + Math.sin(t * 0.5) * 0.015;
+        u.leftArmGroup.rotation.z = -0.18;
+        u.leftArmGroup.rotation.y = 0.22;
+
+        // Subtle expressive secondary motions: head tilt & body weight shift
+        if (u.headGroup) {
+          u.headGroup.rotation.z = Math.sin(t * waveSpeed) * 0.06; // gentle curious head tilt
+          u.headGroup.rotation.x = Math.sin(t * 0.5) * 0.03 - 0.02; // soft nod toward camera
+        }
+        if (u.torso) {
+          u.torso.rotation.z = -Math.sin(t * waveSpeed) * 0.025; // organic counter-balance sway
+          u.torso.rotation.x = 0;
+          u.torso.position.y = 0.85 + Math.sin(t * 0.8) * 0.02; // smooth breathing bounce
+        }
+
+        u.leftLegGroup.rotation.x = 0;
+        u.rightLegGroup.rotation.x = 0;
       }
-      u.leftLegGroup.rotation.x = 0;
-      u.rightLegGroup.rotation.x = 0;
-      u.torso.position.y = 0.85 + Math.sin(t * 0.8) * 0.02;
       return;
+    }
+
+    // Reset waving-specific head or torso tilt when moving, jumping, swimming, or idling
+    if (u.headGroup) {
+      u.headGroup.rotation.z = 0;
+      u.headGroup.rotation.x = 0;
+    }
+    if (u.torso) {
+      u.torso.rotation.z = 0;
     }
 
     if (isSwimming) {
